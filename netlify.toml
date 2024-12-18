@@ -1,5 +1,11 @@
 [build]
-  functions = "functions"
+  base = ""  # Leave empty if the project is in the root directory
+  command = "python3 -m pip install -r requirements.txt"
+  publish = "."
+  functions = "netlify/functions"  # Location of serverless functions
 
 [dev]
-  functions = "functions"
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_ENV = "production"
