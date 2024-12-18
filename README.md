@@ -58,6 +58,4 @@ We welcome contributions to this project! Feel free to fork the repository, crea
 ## License:
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
----
 
-This README provides a comprehensive guide for anyone to understand, set up, and contribute to your project. You can copy and paste this directly into your `README.md` file on GitHub. Let me know if you need further modifications!
