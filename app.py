@@ -4,11 +4,8 @@ from transformers import pipeline, AutoModelForQuestionAnswering, AutoTokenizer
 import os
 
 
-# Use the Render-provided port or default to 7860
-port = int(os.environ.get("PORT", 7860))
 
-# Launch Gradio interface on the specified port
-interface.launch(server_name="0.0.0.0", server_port=port)
+
 
 
 # Function to check file type and validate PDF
@@ -92,9 +89,14 @@ def create_gradio_interface():
     return interface
 
 # Launch the Gradio interface
+# Create and launch the Gradio interface
 def launch_interface():
     """Launches the Gradio interface."""
     interface = create_gradio_interface()
-    interface.launch()
+
+    # Set the server_name and server_port for deployment on Render
+    import os
+    port = int(os.environ.get("PORT", 7860))
+    interface.launch(server_name="0.0.0.0", server_port=port)
 
 launch_interface()
