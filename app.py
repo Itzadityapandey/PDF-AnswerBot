@@ -1,12 +1,6 @@
 import gradio as gr
-from tika import parser
+import fitz  # PyMuPDF
 from transformers import pipeline, AutoModelForQuestionAnswering, AutoTokenizer
-import os
-
-
-
-
-
 
 # Function to check file type and validate PDF
 def validate_pdf_file(file_path):
@@ -33,11 +27,15 @@ def initialize_pipeline(model, tokenizer):
 
 qa_pipeline = initialize_pipeline(model, tokenizer)
 
-# Function to extract text from the uploaded PDF
+# Function to extract text from the uploaded PDF using PyMuPDF
 def extract_text_from_pdf(pdf_file):
-    """Extracts text content from the uploaded PDF file using Tika."""
-    raw = parser.from_file(pdf_file.name)  # Use the file path to extract text
-    return raw['content']
+    """Extracts text content from the uploaded PDF file using PyMuPDF."""
+    doc = fitz.open(pdf_file.name)  # Open the PDF file
+    extracted_text = ""
+    for page in doc:  # Iterate through each page
+        extracted_text += page.get_text()  # Extract text from the page
+    doc.close()
+    return extracted_text
 
 # Function to process the uploaded PDF
 def process_pdf(file_path):
@@ -89,14 +87,9 @@ def create_gradio_interface():
     return interface
 
 # Launch the Gradio interface
-# Create and launch the Gradio interface
 def launch_interface():
     """Launches the Gradio interface."""
     interface = create_gradio_interface()
-
-    # Set the server_name and server_port for deployment on Render
-    import os
-    port = int(os.environ.get("PORT", 7860))
-    interface.launch(server_name="0.0.0.0", server_port=port)
+    interface.launch()
 
 launch_interface()
