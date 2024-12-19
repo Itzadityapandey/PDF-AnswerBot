@@ -89,11 +89,10 @@ def create_gradio_interface():
 def launch_interface():
     """Launches the Gradio interface."""
     interface = create_gradio_interface()
-    
-    # Get the port from environment variable or default to 7860
+    interface.launch()
+    # Set the server_name and server_port for deployment on Render
+    import os
     port = int(os.environ.get("PORT", 7860))
-    
-    # Launch the interface, bind to all network interfaces, and use the correct port
-    interface.launch(server_name="0.0.0.0", server_port=port, share=True)
+    interface.launch(server_name="0.0.0.0", server_port=port)
 
 launch_interface()
