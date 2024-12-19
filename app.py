@@ -3,6 +3,14 @@ from tika import parser
 from transformers import pipeline, AutoModelForQuestionAnswering, AutoTokenizer
 import os
 
+
+# Use the Render-provided port or default to 7860
+port = int(os.environ.get("PORT", 7860))
+
+# Launch Gradio interface on the specified port
+interface.launch(server_name="0.0.0.0", server_port=port)
+
+
 # Function to check file type and validate PDF
 def validate_pdf_file(file_path):
     """Checks if the uploaded file is a valid PDF."""
