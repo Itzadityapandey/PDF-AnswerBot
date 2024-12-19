@@ -1,6 +1,7 @@
 import gradio as gr
 import fitz  # PyMuPDF
 from transformers import pipeline, AutoModelForQuestionAnswering, AutoTokenizer
+import os
 
 # Function to check file type and validate PDF
 def validate_pdf_file(file_path):
@@ -75,10 +76,8 @@ def create_gradio_interface():
     """Creates the Gradio interface for the PDF Q&A Model."""
     interface = gr.Interface(
         fn=answer_question_with_confidence,
-        inputs=[
-            gr.File(label="Upload PDF", type="filepath", file_types=[".pdf"]),  # Use 'filepath' here
-            gr.Textbox(label="Ask a Question")
-        ],
+        inputs=[gr.File(label="Upload PDF", type="filepath", file_types=[".pdf"]),  # Use 'filepath' here
+                gr.Textbox(label="Ask a Question")],
         outputs=["text", "text"],
         title="PDF Q&A Model",
         description="Upload a PDF document and ask questions about its content. For better results, follow these tips: " + provide_question_tips(),
@@ -90,9 +89,11 @@ def create_gradio_interface():
 def launch_interface():
     """Launches the Gradio interface."""
     interface = create_gradio_interface()
-    interface.launch()
-    # Set the server_name and server_port for deployment on Render
-    import os
+    
+    # Get the port from environment variable or default to 7860
     port = int(os.environ.get("PORT", 7860))
-    interface.launch(server_name="0.0.0.0", server_port=port)
+    
+    # Launch the interface, bind to all network interfaces, and use the correct port
+    interface.launch(server_name="0.0.0.0", server_port=port, share=True)
+
 launch_interface()
