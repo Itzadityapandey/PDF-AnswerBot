@@ -1,5 +1,5 @@
 gradio
-fitz  
+pymupdf
 sentence-transformers
 transformers
 torch
