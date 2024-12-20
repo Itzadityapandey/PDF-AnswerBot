@@ -1,5 +1,7 @@
 gradio
+fitz  
+sentence-transformers
 transformers
 torch
-PyMuPDF
-tika
+numpy
+scikit-learn
