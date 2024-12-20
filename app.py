@@ -1,96 +1,76 @@
 import gradio as gr
 import fitz  # PyMuPDF
+from sentence_transformers import SentenceTransformer
 from transformers import pipeline, AutoModelForQuestionAnswering, AutoTokenizer
 import os
+import numpy as np
 
-# Function to check file type and validate PDF
-def validate_pdf_file(file_path):
-    """Checks if the uploaded file is a valid PDF."""
-    if not file_path.lower().endswith(".pdf"):
-        raise ValueError("Invalid file format. Please upload a PDF file.")
-    return True
+# Load models
+def initialize_models():
+    qa_model_name = "tiiuae/falcon-7b-instruct"
+    embedding_model_name = "all-MiniLM-L6-v2"
+    
+    # Question-answering model
+    qa_tokenizer = AutoTokenizer.from_pretrained(qa_model_name)
+    qa_model = AutoModelForQuestionAnswering.from_pretrained(qa_model_name)
+    qa_pipeline = pipeline("text-generation", model=qa_model, tokenizer=qa_tokenizer)
 
-# Load pre-trained model and tokenizer for question-answering once at the start
-def load_qa_model():
-    """Loads the pre-trained model and tokenizer for question-answering."""
-    model_name = "distilbert-base-uncased-distilled-squad"  # Pre-trained model for QA
-    model = AutoModelForQuestionAnswering.from_pretrained(model_name)
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    return model, tokenizer
+    # Embedding model
+    embedding_model = SentenceTransformer(embedding_model_name)
+    
+    return qa_pipeline, embedding_model
 
-model, tokenizer = load_qa_model()
+qa_pipeline, embedding_model = initialize_models()
 
-# Initialize the question-answering pipeline with the pre-trained model
-def initialize_pipeline(model, tokenizer):
-    """Initializes the question-answering pipeline."""
-    qa_pipeline = pipeline("question-answering", model=model, tokenizer=tokenizer)
-    return qa_pipeline
-
-qa_pipeline = initialize_pipeline(model, tokenizer)
-
-# Function to extract text from the uploaded PDF using PyMuPDF
+# Extract text from PDF
 def extract_text_from_pdf(pdf_file):
-    """Extracts text content from the uploaded PDF file using PyMuPDF."""
-    doc = fitz.open(pdf_file.name)  # Open the PDF file
-    extracted_text = ""
-    for page in doc:  # Iterate through each page
-        extracted_text += page.get_text()  # Extract text from the page
+    doc = fitz.open(pdf_file.name)
+    text = ""
+    for page in doc:
+        text += page.get_text()
     doc.close()
-    return extracted_text
+    return text
 
-# Function to process the uploaded PDF
-def process_pdf(file_path):
-    """Processes the uploaded PDF file and extracts its content."""
-    validate_pdf_file(file_path)
-    return extract_text_from_pdf(file_path)
+# Chunk text
+def chunk_text(text, chunk_size=500):
+    words = text.split()
+    return [' '.join(words[i:i+chunk_size]) for i in range(0, len(words), chunk_size)]
 
-# Function to answer questions based on the extracted text from PDF
+# Find the most relevant chunk
+def find_relevant_chunk(question, chunks, embedding_model):
+    question_embedding = embedding_model.encode([question])[0]
+    chunk_embeddings = embedding_model.encode(chunks)
+    similarities = np.dot(chunk_embeddings, question_embedding)  # Faster similarity calculation
+    best_chunk_index = np.argmax(similarities)
+    return chunks[best_chunk_index]
+
+# Answer the question
 def answer_question_with_confidence(pdf_file, question):
-    """Extracts text from the uploaded PDF and answers the question with a confidence score."""
-    # Extract text from the uploaded PDF
     context = extract_text_from_pdf(pdf_file)
+    chunks = chunk_text(context)
+    relevant_chunk = find_relevant_chunk(question, chunks, embedding_model)
     
-    # Get the answer to the user's question from the extracted context
-    result = qa_pipeline(question=question, context=context)
-    
-    # Answer and confidence score
-    answer = result['answer']
-    confidence = result.get('score', 0)  # Confidence score of the answer
-    
-    # Return the answer and confidence
+    # Get the answer using the QA pipeline
+    response = qa_pipeline(question=question, context=relevant_chunk)
+    answer = response["answer"]
+    confidence = response.get("score", 0)
     return f"Answer: {answer}", f"Confidence: {confidence:.2%}"
 
-# Function to provide extra tips for question formulation
-def provide_question_tips():
-    """Provides tips for asking better questions to the model."""
-    tips = """
-    1. Be specific with your questions.
-    2. Avoid asking very general questions like 'What is the document about?'
-    3. Try asking questions related to sections or paragraphs of the document.
-    4. Ensure that your question is clearly stated and grammatically correct.
-    """
-    return tips
-
-# Create the Gradio interface
+# Create Gradio interface
 def create_gradio_interface():
-    """Creates the Gradio interface for the PDF Q&A Model."""
     interface = gr.Interface(
         fn=answer_question_with_confidence,
-        inputs=[gr.File(label="Upload PDF", type="filepath", file_types=[".pdf"]),  # Use 'filepath' here
+        inputs=[gr.File(label="Upload PDF", type="file", file_types=[".pdf"]),
                 gr.Textbox(label="Ask a Question")],
         outputs=["text", "text"],
-        title="PDF Q&A Model",
-        description="Upload a PDF document and ask questions about its content. For better results, follow these tips: " + provide_question_tips(),
-        theme="huggingface"  # You can customize the theme if needed
+        title="Optimized PDF Q&A Bot",
+        description="Upload a PDF and ask questions. This version is optimized for faster performance.",
     )
     return interface
 
-# Launch the Gradio interface
+# Launch Gradio
 def launch_interface():
-    """Launches the Gradio interface."""
     interface = create_gradio_interface()
-    
-    # Set the server_name and server_port for deployment on Render
     port = int(os.environ.get("PORT", 7860))
     interface.launch(server_name="0.0.0.0", server_port=port)
 
