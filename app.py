@@ -1,3 +1,4 @@
+import os
 import gradio as gr
 import fitz  # PyMuPDF
 from sentence_transformers import SentenceTransformer
