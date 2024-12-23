@@ -1,7 +1,8 @@
 gradio
-pymupdf
+google-generativeai
+python-dotenv
+PyMuPDF
 sentence-transformers
 transformers
-torch
-numpy
 scikit-learn
+numpy
