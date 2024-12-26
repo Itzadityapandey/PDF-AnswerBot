@@ -1,9 +1,8 @@
-import os
 import gradio as gr
-import fitz  # PyMuPDF
 from sentence_transformers import SentenceTransformer
 import numpy as np
 from sklearn.preprocessing import normalize
+import os
 from dotenv import load_dotenv
 import google.generativeai as genai
 
@@ -20,16 +19,6 @@ def initialize_embedding_model():
     return embedding_model
 
 embedding_model = initialize_embedding_model()
-
-# Extract text from PDF
-def extract_text_from_pdf(pdf_file):
-    """Extracts all text from the uploaded PDF file."""
-    doc = fitz.open(pdf_file)  # Open the PDF file using its filepath
-    text = ""
-    for page in doc:
-        text += page.get_text()  # Extract text from each page
-    doc.close()
-    return text
 
 # Split text into manageable chunks
 def chunk_text(text, chunk_size=300):
@@ -93,14 +82,16 @@ def query_gemini_api(question, context):
         return {"error": f"Error during API call: {e}"}
 
 # Generate the answer to the user's question
-def answer_question(pdf_file, question):
-    """Answers the user's question based on the PDF content."""
+def answer_question(pasted_text, question):
+    """Answers the user's question based on the pasted text."""
     try:
-        text = extract_text_from_pdf(pdf_file)
-        chunks = chunk_text(text)
+        if not pasted_text.strip():
+            return "No input provided.", "Please paste some text to analyze."
+
+        chunks = chunk_text(pasted_text)
         relevant_chunks = find_relevant_chunks(question, chunks)
         if not relevant_chunks:
-            return "Could not process this document.", "No relevant chunks found."
+            return "Could not process the provided text.", "No relevant chunks found."
         context = " ".join(relevant_chunks)
         gemini_response = query_gemini_api(question, context)
 
@@ -119,15 +110,15 @@ def create_gradio_interface():
     """Sets up the Gradio interface for local deployment."""
     interface = gr.Interface(
         fn=answer_question,
-        inputs=[ 
-            gr.File(label="Upload PDF", type="filepath", file_types=[".pdf"]),  # Use filepath for local file processing
+        inputs=[
+            gr.Textbox(label="Paste Text"),  # User pastes text here
             gr.Textbox(label="Ask a Question")  # User enters the question
         ],
         outputs=["text", "text"],
-        title="PDF Q&A Bot with Gemini API",
+        title="Text Q&A Bot with Gemini API",
         description=(
-            "Upload a PDF and ask questions about its content. "
-            "The bot will extract text from the PDF and provide answers based on its content using the Gemini API."
+            "Paste text and ask questions about its content. "
+            "The bot will provide answers based on the content using the Gemini API."
         ),
         theme="default",
     )
