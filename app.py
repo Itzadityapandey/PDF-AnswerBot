@@ -81,27 +81,44 @@ def query_gemini_api(question, context):
     except Exception as e:
         return {"error": f"Error during API call: {e}"}
 
-# Generate the answer to the user's question
 def answer_question(pasted_text, question):
     """Answers the user's question based on the pasted text."""
     try:
+        # Validate input
         if not pasted_text.strip():
-            return "No input provided.", "Please paste some text to analyze."
-
-        chunks = chunk_text(pasted_text)
+            return "Error: Input text is empty.", "Please paste valid text to process."
+        
+        # Preprocess text
+        preprocessed_text = preprocess_text(pasted_text)
+        
+        # Chunk text
+        chunks = chunk_text(preprocessed_text)
+        if not chunks:
+            return "Error: Unable to process the text.", "No chunks were generated from the input."
+        
+        # Find relevant chunks
         relevant_chunks = find_relevant_chunks(question, chunks)
         if not relevant_chunks:
-            return "Could not process the provided text.", "No relevant chunks found."
+            return "Error: No relevant chunks found.", "Please try with more detailed text."
+        
+        # Combine chunks into context
         context = " ".join(relevant_chunks)
+        print(f"Context being sent to Gemini API: {context}")
+        
+        # Ensure context is not empty
+        if not context.strip():
+            return "Error: Context is empty.", "The input text might not contain sufficient information."
+        
+        # Query Gemini API
         gemini_response = query_gemini_api(question, context)
-
+        
         if "error" in gemini_response:
             return "Error processing your request.", gemini_response["error"]
-
+        
         answer = gemini_response.get("answer", "No answer found.")
         confidence = gemini_response.get("confidence", 0)
         return f"Answer: {answer}", f"Confidence: {confidence:.2%}"
-
+    
     except Exception as e:
         return "Error processing your request.", str(e)
 
