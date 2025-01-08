@@ -1,4 +1,3 @@
-Here's a tailored README for your project on GitHub, based on the provided link and the information you've shared:
 
 ---
 
