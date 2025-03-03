@@ -1,156 +1,115 @@
-import gradio as gr
-from sentence_transformers import SentenceTransformer
-import numpy as np
-from sklearn.preprocessing import normalize
 import os
-from dotenv import load_dotenv
+import gradio as gr
+from PyPDF2 import PdfReader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 import google.generativeai as genai
+from langchain_community.vectorstores import FAISS
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain.chains.question_answering import load_qa_chain
+from langchain.prompts import PromptTemplate
+from dotenv import load_dotenv
 
-# Load environment variables (API Key for Gemini)
+# Load environment variables
 load_dotenv()
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+genai.configure(api_key=GOOGLE_API_KEY)
 
-# Configure Gemini API
-genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+# Directory to save FAISS index
+INDEX_PATH = "faiss_index"
 
-# Initialize lightweight models for embeddings
-def initialize_embedding_model():
-    embedding_model_name = "all-MiniLM-L6-v2"  # Lightweight embedding model
-    embedding_model = SentenceTransformer(embedding_model_name)
-    return embedding_model
+def get_pdf_text(pdf_files):
+    text = ""
+    for pdf in pdf_files:
+        try:
+            pdf_reader = PdfReader(pdf.name)
+            for page in pdf_reader.pages:
+                extracted_text = page.extract_text()
+                if extracted_text:
+                    text += extracted_text
+        except Exception as e:
+            return f"Error reading PDF: {str(e)}"
+    return text
 
-embedding_model = initialize_embedding_model()
+def get_text_chunks(text):
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=10000, chunk_overlap=1000)
+    return text_splitter.split_text(text)
 
-# Split text into manageable chunks
-def chunk_text(text, chunk_size=300):
-    """Splits text into smaller chunks for processing."""
+def create_vector_store(text_chunks):
     try:
-        sentences = text.split('\n')
-        chunks = []
-        current_chunk = ""
-
-        for sentence in sentences:
-            if len(current_chunk.split()) + len(sentence.split()) <= chunk_size:
-                current_chunk += " " + sentence
-            else:
-                if current_chunk:
-                    chunks.append(current_chunk.strip())
-                current_chunk = sentence
-        if current_chunk:
-            chunks.append(current_chunk.strip())
-        return chunks
+        embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+        vector_store = FAISS.from_texts(text_chunks, embedding=embeddings)
+        vector_store.save_local(INDEX_PATH)  # Save to disk
+        return "PDFs processed successfully! Vector store saved. Now you can ask questions."
     except Exception as e:
-        print(f"Error during text chunking: {e}")
-        return []
+        return f"Error creating vector store: {str(e)}"
 
-# Find the most relevant chunks of text
-def find_relevant_chunks(question, chunks, top_k=3):
-    """Finds the k most relevant chunks of text for the given question."""
-    if not chunks:
-        return []
-    question_embedding = normalize([embedding_model.encode(question)])
-    chunk_embeddings = normalize(embedding_model.encode(chunks))
-    similarities = np.dot(chunk_embeddings, question_embedding.T).flatten()
-    top_chunk_indices = np.argsort(similarities)[-top_k:][::-1]
-    return [chunks[i] for i in top_chunk_indices]
-
-# Query the Gemini API using the client library
-def query_gemini_api(question, context):
-    """Sends the question and context to the Gemini API and retrieves the answer."""
+def load_vector_store():
     try:
-        chat_session = genai.GenerativeModel(
-            model_name="gemini-2.0-flash-exp",
-            generation_config={
-                "temperature": 1,
-                "top_p": 0.95,
-                "top_k": 40,
-                "max_output_tokens": 8192,
-                "response_mime_type": "text/plain",
-            },
-        ).start_chat(
-            history=[
-                {
-                    "role": "user",
-                    "parts": [
-                        f"Given the following context: '{context}'. Answer this question: {question}"
-                    ],
-                },
-            ]
-        )
-        response = chat_session.send_message("")  # Trigger the response
-        return {"answer": response.text, "confidence": 1.0}  # Dummy confidence - can't get it directly
+        embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+        if os.path.exists(INDEX_PATH):
+            return FAISS.load_local(INDEX_PATH, embeddings, allow_dangerous_deserialization=True)
+        return None
     except Exception as e:
-        return {"error": f"Error during API call: {e}"}
+        return None
 
-def answer_question(pasted_text, question):
-    """Answers the user's question based on the pasted text."""
+def get_conversational_chain():
+    prompt_template = """
+    Answer the question as detailed as possible from the provided context. 
+    If the answer is not in the provided context, respond with "answer is not available in the context".
+    Do not provide incorrect information.
+    
+    Context:
+    {context}
+    
+    Question: 
+    {question}
+    
+    Answer:
+    """
+    model = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0.3)
+    prompt = PromptTemplate(template=prompt_template, input_variables=["context", "question"])
+    return load_qa_chain(model, chain_type="stuff", prompt=prompt)
+
+def query_pdf(user_question):
+    vector_store = load_vector_store()
+    if vector_store is None:
+        return "Please process a PDF first by uploading and submitting it."
+    
     try:
-        # Validate input
-        if not pasted_text.strip():
-            return "Error: Input text is empty.", "Please paste valid text to process."
-        
-        # Preprocess text
-        preprocessed_text = preprocess_text(pasted_text)
-        
-        # Chunk text
-        chunks = chunk_text(preprocessed_text)
-        if not chunks:
-            return "Error: Unable to process the text.", "No chunks were generated from the input."
-        
-        # Find relevant chunks
-        relevant_chunks = find_relevant_chunks(question, chunks)
-        if not relevant_chunks:
-            return "Error: No relevant chunks found.", "Please try with more detailed text."
-        
-        # Combine chunks into context
-        context = " ".join(relevant_chunks)
-        print(f"Context being sent to Gemini API: {context}")
-        
-        # Ensure context is not empty
-        if not context.strip():
-            return "Error: Context is empty.", "The input text might not contain sufficient information."
-        
-        # Query Gemini API
-        gemini_response = query_gemini_api(question, context)
-        
-        if "error" in gemini_response:
-            return "Error processing your request.", gemini_response["error"]
-        
-        answer = gemini_response.get("answer", "No answer found.")
-        confidence = gemini_response.get("confidence", 0)
-        return f"Answer: {answer}", f"Confidence: {confidence:.2%}"
-    
+        docs = vector_store.similarity_search(user_question)
+        chain = get_conversational_chain()
+        response = chain({"input_documents": docs, "question": user_question}, return_only_outputs=True)
+        return response["output_text"]
     except Exception as e:
-        return "Error processing your request.", str(e)
+        return f"Error querying the PDF: {str(e)}"
 
-# Create the Gradio interface
-def create_gradio_interface():
-    """Sets up the Gradio interface for local deployment."""
-    interface = gr.Interface(
-        fn=answer_question,
-        inputs=[
-            gr.Textbox(label="Paste Text"),  # User pastes text here
-            gr.Textbox(label="Ask a Question")  # User enters the question
-        ],
-        outputs=["text", "text"],
-        title="Text Q&A Bot with Gemini API",
-        description=(
-            "Paste text and ask questions about its content. "
-            "The bot will provide answers based on the content using the Gemini API."
-        ),
-        theme="default",
-    )
-    return interface
+def process_pdfs(pdf_files):
+    if not pdf_files:
+        return "Please upload at least one PDF."
+    
+    raw_text = get_pdf_text(pdf_files)
+    if isinstance(raw_text, str) and "Error" in raw_text:
+        return raw_text
+    if not raw_text.strip():
+        return "No extractable text found in the uploaded PDFs."
+    
+    text_chunks = get_text_chunks(raw_text)
+    result = create_vector_store(text_chunks)
+    return result
 
-# Launch the Gradio interface
-def launch_interface():
-    """Launches the Gradio interface with Render-compatible port settings."""
-    interface = create_gradio_interface()
+# Gradio UI
+with gr.Blocks(title="Chat with PDF") as demo:
+    gr.Markdown("## Chat with PDF 💁")
+    pdf_input = gr.File(file_types=[".pdf"], label="Upload PDF(s)", file_count="multiple")
+    process_button = gr.Button("Submit & Process")
+    status_output = gr.Textbox(label="Status", placeholder="Status updates will appear here...")
+    question_input = gr.Textbox(label="Ask a Question from the PDF")
+    answer_output = gr.Textbox(label="Reply", placeholder="Answers will appear here...")
+    ask_button = gr.Button("Get Answer")
     
-    # Ensure we use the port provided by Render (or default to 7860 locally)
-    port = int(os.environ.get("PORT", 7860))
-    
-    # Launch the Gradio interface on Render with the specified port
-    interface.launch(server_name="0.0.0.0", server_port=port)
+    process_button.click(process_pdfs, inputs=[pdf_input], outputs=[status_output])
+    ask_button.click(query_pdf, inputs=[question_input], outputs=[answer_output])
 
 if __name__ == "__main__":
-    launch_interface()
+    demo.launch()
