@@ -1,8 +1,7 @@
 # Chat with PDF 
 
 ## 📽 Demo Video
-<video src="media/Chat_with_pdf.mp4" controls width="600"></video>
-
+<[![Watch the demo](https://img.icons8.com/ios-filled/500/play-button-circled.png)](media/Chat_with_pdf.mp4)
 ## Overview
 This project allows users to upload PDF files and chat with their content. It utilizes Google Gemini AI for generating embeddings and answering questions based on extracted text. The PDF content is processed and stored in a FAISS vector database for efficient retrieval.
 
