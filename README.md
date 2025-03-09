@@ -9,7 +9,6 @@ This project allows users to upload PDF files and chat with their content. It ut
 - Upload and process multiple PDF files.
 - Extract and store text in a FAISS vector store.
 - Ask questions about the content and receive AI-generated responses.
-- Uses Google Gemini AI (`gemini-pro`) for conversational responses.
 - Gradio-based web UI for ease of use.
 
 ## Requirements
