@@ -60,7 +60,8 @@ pip install -r requirements.txt
 ├── 📂 faiss_index         # FAISS vector store (auto-created after processing PDFs)
 └── 📜 .env                # Environment variables (API keys, etc.)
 ```
-
+## Diagram
+![Demo Preview](media/diagram.pngs)
 ## Future Enhancements
 - Improve document parsing to handle scanned PDFs (OCR integration).
 - Enhance the UI with real-time chat features.
