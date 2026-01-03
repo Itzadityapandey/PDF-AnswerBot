@@ -4,3 +4,10 @@ numpy
 scikit-learn
 python-dotenv
 google-generativeai
+pypdf2
+langchain
+langchain-community
+langchain-google-genai
+google-generativeai
+python-dotenv
+faiss-cpu
